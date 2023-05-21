@@ -1,0 +1,41 @@
+version: '3.0'
+services:
+  db:
+    image: postgres:10.21-alpine
+    restart: always
+    container_name: ${DATABASE_CONTAINER_NAME}
+    environment:
+      - POSTGRES_USER=${DATABASE_USERNAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+    ports:
+      - '${DATABASE_PORT}:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+    networks:
+      - app-network
+    env_file:
+      - .env  
+  cache:
+    image: redis:6.2-alpine
+    restart: always
+    container_name: ${REDIS_CONTAINER_NAME}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - '${REDIS_PORT}:6379'
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes: 
+      - cache:/data
+    networks:
+      - app-network
+    env_file:
+      - .env  
+volumes:
+  db:
+    driver: local
+  cache:
+    driver: local
+networks:
+  app-network:
+    driver: bridge

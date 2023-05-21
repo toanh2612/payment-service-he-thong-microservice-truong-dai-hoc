@@ -1,0 +1,46 @@
+{
+  "dependencies": {
+    "@nestjs/cli": "^9.2.0",
+    "@nestjs/common": "^9.3.3",
+    "@nestjs/config": "^2.3.1",
+    "@nestjs/core": "^9.4.0",
+    "@nestjs/cqrs": "^9.0.3",
+    "@nestjs/microservices": "^9.3.2",
+    "@nestjs/platform-express": "^9.3.9",
+    "@nestjs/swagger": "^6.2.1",
+    "@nestjs/typeorm": "^9.0.1",
+    "@types/amqplib": "^0.10.1",
+    "@types/bcrypt": "^5.0.0",
+    "@types/bluebird": "^3.5.38",
+    "@types/jsonwebtoken": "^9.0.1",
+    "@types/lodash": "^4.14.191",
+    "amqplib": "^0.10.3",
+    "bcrypt": "^5.1.0",
+    "bluebird": "^3.7.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.0",
+    "cross-env": "^7.0.3",
+    "ioredis": "^5.3.1",
+    "jsonwebtoken": "^9.0.0",
+    "lodash": "^4.17.21",
+    "pg": "^8.9.0",
+    "redis": "^4.6.4",
+    "rxjs": "^7.8.0",
+    "typeorm": "^0.3.12",
+    "typeorm-transactional-cls-hooked": "^0.1.21",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "prettier": "2.8.4"
+  },
+  "scripts": {
+    "prebuild": "rimraf dist",
+    "build": "rm -rf dist && export NODE_OPTIONS=--max-old-space-size=8192 && nest build",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "cross-env NODE_ENV=development nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "cross-env NODE_ENV=production node ./dist/main.js",
+    "start:init": "docker-compose up -d"
+  }
+}
