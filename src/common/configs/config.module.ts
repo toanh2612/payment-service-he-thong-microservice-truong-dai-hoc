@@ -2,10 +2,10 @@ import { Global, Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
-import { CONFIG, CONFIGURATION } from "./config";
-import { PaymentEntity } from "../entities/payment.entity";
 import { PaymentDetailEntity } from "../entities/PaymentDetail.entity";
 import { EventEntity } from "../entities/event.entity";
+import { PaymentEntity } from "../entities/payment.entity";
+import { CONFIG, CONFIGURATION } from "./config";
 
 @Global()
 @Module({

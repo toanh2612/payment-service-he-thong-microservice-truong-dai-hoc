@@ -1,6 +1,6 @@
 import { CONSTANT } from "src/common/utils/constant";
 import EventEmitterService from "../eventEmitter/evenEmitter.service";
-import { Injectable, Scope } from "@nestjs/common";
+import { Injectable, Logger, Scope } from "@nestjs/common";
 
 const amqplib = require("amqplib");
 @Injectable({ scope: Scope.DEFAULT })
@@ -20,6 +20,10 @@ export default class RabbitMQService {
       this.channel = await conn.createChannel();
       return conn;
     } catch (error) {
+      setTimeout(() => {
+        this.init();
+        Logger.log("reconnect RabbitMQ");
+      }, 10000);
       throw new Error(error);
     }
   }
@@ -32,6 +36,16 @@ export default class RabbitMQService {
       durable: true,
     });
     await this.channel.publish(exChangeName, "", Buffer.from(data));
+  }
+
+  async sendToQueue(queue, data: any) {
+    if (typeof data === "object") {
+      data = JSON.stringify(data);
+    }
+    this.channel.assertQueue(queue);
+    this.channel.sendToQueue(queue, Buffer.from(data), {
+      persistent: true,
+    });
   }
 
   async receiver(exChangeName, queueNames) {

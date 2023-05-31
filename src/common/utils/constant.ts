@@ -15,59 +15,83 @@ export const CONSTANT = {
         "SCHEDULE.UPDATE_CLASS_PERIOD_TIME_RANGE",
       CREATE_ATTENDANCE_SUCCESSED: "SCHEDULE.CREATE_ATTENDANCE_SUCCESSED",
       UPDATE_ATTENDANCE_SUCCESSED: "SCHEDULE.UPDATE_ATTENDANCE_SUCCESSED",
-      REGISTER_CLASSROOM_INIT: "SCHEDULE.REGISTER_CLASSROOM_INIT",
-      CANCEL_CLASSROOM: "SCHEDULE.CANCEL_CLASSROOM",
+      REGISTER_CLASSROOMS: "SCHEDULE.REGISTER_CLASSROOMS",
     },
     PAYMENT: {
+      PAYMENT_CREATION_SUCCESSED: "PAYMENT.PAYMENT_CREATION_SUCCESSED",
+      PAYMENT_CREATION_FAILED: "PAYMENT.PAYMENT_CREATION_FAILED",
       PAYMENT_SUCCESSED: "PAYMENT.PAYMENT_SUCCESSED",
       PAYMENT_FAILED: "PAYMENT.PAYMENT_FAILED",
+      PAYMENT_CANCELED: "PAYMENT.PAYMENT_CANCELED",
     },
     NOTIFICATION: {},
   },
   CALL_OTHER_SERVICE_TIMEOUT: 10000,
   RABBITMQ: {
-    CONNECTION_URL: `amqp://${CONFIG["RABBITMQ_USERNAME"]}:${CONFIG["RABBITMQ_PASSWORD"]}@localhost`,
-    CHANNEL_TYPE: {
-      RECEIVE: "receive",
-      SEND: "send",
-    },
+    CONNECTION_URL: `amqp://${CONFIG["RABBITMQ_USERNAME"]}:${CONFIG["RABBITMQ_PASSWORD"]}@${CONFIG["RABBITMQ_HOST"]}`,
     EXCHANGE_NAME: "TOPIC",
   },
   ERROR: {
-    E0000: {
-      code: "E0000",
-      httpStatusCode: 500,
-      message: "General error",
+    SYSTEM: {
+      GENERAL_ERROR: {
+        code: "E0000",
+        httpStatusCode: 500,
+        message: "General error",
+      },
+      CONNECT: {
+        RABBITMQ: {
+          code: "E0005",
+          httpStatusCode: 500,
+          message: "Can't conntect rabbitMQ",
+        },
+      },
     },
-    E0001: {
-      code: "E0001",
-      httpStatusCode: 402,
-      message: "Invalid username or email",
+    USER: {
+      LOGIN: {
+        USERNAME_EMAIL_INVALID: {
+          code: "E0001",
+          httpStatusCode: 402,
+          message: "Invalid username or email",
+        },
+        PASSWORD_IS_WRONG: {
+          httpStatusCode: 401,
+          message: "Password is wrong",
+        },
+      },
+      NOT_FOUND: {
+        code: "E0002",
+        httpStatusCode: 404,
+        message: "User not found",
+      },
+      NOT_PERMISSION: {
+        code: "E0004",
+        httpStatusCode: 403,
+        message: "Not permission",
+      },
+      UNAUTHORIZATED: {
+        code: "E0006",
+        httpStatusCode: 401,
+        message: "Unauthorizated",
+      },
     },
-    E0002: {
-      code: "E0002",
-      httpStatusCode: 404,
-      message: "User not found",
+    PAYMENT: {
+      NOT_FOUND: {
+        code: "E0007",
+        httpStatusCode: 404,
+        message: "Payment not found",
+      },
+      UPDATE_STATUS: {
+        code: "E0010",
+        httpStatusCode: 400,
+        message: `Payment can not update status. Current status is AWAITTING_PAYMENT`,
+      },
     },
-    E0003: {
-      code: "E0003",
-      httpStatusCode: 401,
-      message: "Password is wrong",
-    },
-    E0004: {
-      code: "E0004",
-      httpStatusCode: 403,
-      message: "Not permission",
-    },
-    E0005: {
-      code: "E0005",
-      httpStatusCode: 500,
-      message: "Can't conntect rabbitMQ",
-    },
-    E0006: {
-      code: "E0006",
-      httpStatusCode: 401,
-      message: "Unauthorizated",
+    CLASSROOM_STUDENT: {
+      REGISTERED_CLASSROOM: {
+        code: "E0008",
+        httpStatusCode: 409,
+        message: "Registered classroom",
+      },
     },
   },
   EVENT_STORE: {
@@ -81,21 +105,30 @@ export const CONSTANT = {
       ROLLBACK: "ROLLBACK",
     },
     ENTITY_TYPE: {
-      PAYMENT: "PaymentEntity",
-      PAYMENT_DETAIL: "PaymentDetailEntity",
+      PAYMENT: "PAYMENT",
+      PAYMENT_DETAIL: "PAYMENT_DETAIL",
+      CLASSROOM_STUDENT: "CLASSROOM_STUDENT",
     },
   },
   ENTITY: {
     PAYMENT: {
       STATUS: {
-        CANCEL: "CANCEL",
+        FAILED: "FAILED",
+        CANCELED: "CANCELED",
         REFUND: "REFUND",
-        INIT: "INIT",
-        WAIT: "WAIT",
-        DONE: "DONE",
+        AWAITTING_PAYMENT: "AWAITTING_PAYMENT",
+        FINISHED: "FINISHED",
       },
       PAYMENT_TYPE: {
         ZALO_PAY: "ZALO_PAY",
+      },
+    },
+    CLASSROOM_STUDENT: {
+      STATUS: {
+        PENDING: "PENDING",
+        AWAITTING_PAYMENT: "AWAITTING_PAYMENT",
+        AWAITTING_CREATE_PAYMENT: "AWAITTING_CREATE_PAYMENT",
+        FINISHED: "FINISHED",
       },
     },
   },

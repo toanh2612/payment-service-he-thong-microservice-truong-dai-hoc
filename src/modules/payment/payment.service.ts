@@ -2,16 +2,17 @@ import { Injectable, Scope } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { PaymentEntity } from "src/common/entities/payment.entity";
 import { DataSource } from "typeorm";
+const PromiseBlueBird = require("bluebird");
 import {
   addOrderBy,
   addWhere,
   generateRandomCode,
 } from "src/common/utils/utils";
 import { IPayment } from "./interfaces/IPayment.interface";
-import { v4 } from "uuid";
 import { CONSTANT } from "src/common/utils/constant";
 import EventEmitterService from "../eventEmitter/evenEmitter.service";
 import EventStoreService from "../eventStore/eventStore.service";
+import RabbitMQService from "../rabbitMQ/rabbitMQ.service";
 import { PaymentDetailEntity } from "src/common/entities/PaymentDetail.entity";
 
 @Injectable({ scope: Scope.DEFAULT })
@@ -20,20 +21,63 @@ export default class PaymentService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly eventStoreService: EventStoreService,
-    private readonly eventEmitterService: EventEmitterService
+    private readonly eventEmitterService: EventEmitterService,
+    private readonly rabbitMQService: RabbitMQService
   ) {
     this.eventEmitterService
       .get()
       .on(
-        CONSTANT.EVENT.SCHEDULE.REGISTER_CLASSROOM_INIT,
-        this.registerClassroomInitEvent.bind(this)
+        CONSTANT.EVENT.SCHEDULE.REGISTER_CLASSROOMS,
+        this.registerClassroomsEventHandler.bind(this)
       );
-    this.eventEmitterService
-      .get()
-      .on(
-        CONSTANT.EVENT.SCHEDULE.CANCEL_CLASSROOM,
-        this.cancelClassroomsEvent.bind(this)
-      );
+  }
+
+  async getMyList(
+    student,
+    filter: any,
+    order: any,
+    page: number,
+    perPage: number,
+    filterOptions?: any
+  ): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        filterOptions = filterOptions || {};
+        const relativeFields: string[] = [];
+
+        let getPaymentListQuery = await this.dataSource
+          .getRepository(PaymentEntity)
+          .createQueryBuilder("payment")
+          .leftJoinAndSelect("payment.paymentDetails", "paymentDetails")
+          .where("payment.student_id = :studentId", {
+            studentId: student.id,
+          })
+          .skip((page - 1) * perPage)
+          .take(perPage);
+
+        getPaymentListQuery = addWhere(
+          getPaymentListQuery,
+          filter,
+          relativeFields
+        );
+        getPaymentListQuery = addOrderBy(getPaymentListQuery, order);
+
+        const paymentFoundList: IPayment[] =
+          await getPaymentListQuery.getMany();
+        const paymentFoundCount: number = await getPaymentListQuery.getCount();
+
+        return resolve({
+          result: paymentFoundList,
+          paging: {
+            page,
+            perPage,
+            total: paymentFoundCount,
+          },
+        });
+      } catch (error) {
+        return reject(error);
+      }
+    });
   }
 
   async getList(
@@ -140,7 +184,7 @@ export default class PaymentService {
     });
   }
 
-  async update(id: string, updatePaymentData: any): Promise<any> {
+  async updateStatus(id: string, status: string, student): Promise<any> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -152,162 +196,216 @@ export default class PaymentService {
           .where("payment.id = :id", {
             id: id,
           })
-          .andWhere("payment.is_deleted = false")
           .getOne();
 
         if (!paymentFound) {
-          return reject({
-            code: "",
-            message: "",
-          });
+          return reject(CONSTANT.ERROR.PAYMENT.NOT_FOUND);
         }
+
+        if (
+          paymentFound.status !==
+          CONSTANT.ENTITY.PAYMENT.STATUS.AWAITTING_PAYMENT
+        ) {
+          return reject(CONSTANT.ERROR.PAYMENT.UPDATE_STATUS);
+        }
+
+        const { compensationId } = paymentFound;
 
         await queryRunner.manager
           .getRepository(PaymentEntity)
           .createQueryBuilder()
           .update(PaymentEntity)
-          .set(updatePaymentData)
+          .set({ status })
           .where("id = :id", { id: paymentFound.id })
           .execute();
 
         await queryRunner.commitTransaction();
         await queryRunner.release();
 
-        paymentFound = await this.dataSource
+        const paymentUpdatedFound = await this.dataSource
           .getRepository(PaymentEntity)
           .createQueryBuilder("payment")
           .where("payment.id = :id", {
             id: paymentFound.id,
           })
-          .andWhere("payment.is_deleted = false")
           .getOne();
 
-        return resolve({
-          result: paymentFound,
-        });
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        await queryRunner.release();
-
-        return reject(error);
-      }
-    });
-  }
-
-  async cancelClassroomsEvent(payload): Promise<any> {
-    return new Promise(async (resolve, reject) => {
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
-      try {
-        const classroomList = payload?.data?.classroomList;
-        const student = payload?.data?.student;
-        await Promise.all(
-          classroomList.map(async (classroom) => {
-            const { id } = classroom;
-            if (!id) {
-              return reject({
-                code: "",
-                message: `Not found classroom ${classroom.id}`,
-              });
-            }
-
-            let paymentDetailFound = await queryRunner.manager
-              .getRepository(PaymentDetailEntity)
-              .createQueryBuilder("paymentDetail")
-              .where("paymentDetail.studentId = :studentId", {
-                studentId: student.id,
-              })
-              .andWhere("paymentDetail.classroomId = :classroomId", {
-                classroomId: classroom.id,
-              })
-              .getOne();
-
-            if (!paymentDetailFound) {
-              return reject({
-                message: `Not found classroom ${classroom.id} with student ${student.id}`,
-              });
-            }
-
-            const payment = paymentDetailFound?.payment;
-            let paymentFound = await queryRunner.manager
-              .getRepository(PaymentEntity)
-              .createQueryBuilder("payment")
-              .where("payment.id = :paymentId", {
-                paymentId: payment?.id,
-              })
-              .andWhere("payment.is_deleted = false")
-              .getOne();
-
-            if (!paymentFound) {
-              return reject({
-                code: "",
-                message: "",
-              });
-            }
-
-            await queryRunner.manager
-              .getRepository(PaymentEntity)
-              .createQueryBuilder()
-              .update(PaymentEntity)
-              .set({
-                status: CONSTANT.ENTITY.PAYMENT.STATUS.REFUND,
-              })
-              .where("id = :id", { id: paymentFound.id })
-              .execute();
+        const paymentDetailList = await this.dataSource
+          .getRepository(PaymentDetailEntity)
+          .createQueryBuilder("paymentDetail")
+          .where("paymentDetail.payment_id = :paymentId", {
+            paymentId: paymentFound.id,
           })
+          .getMany();
+
+        const classroomList = paymentDetailList.map((paymentDetail) => {
+          return paymentDetail.classroom;
+        });
+        await this.eventStoreService.commit(
+          compensationId,
+          paymentFound,
+          paymentUpdatedFound,
+          "PAYMENT"
         );
 
-        await queryRunner.commitTransaction();
-        await queryRunner.release();
+        switch (status) {
+          case CONSTANT.ENTITY.PAYMENT.STATUS.FINISHED:
+            await this.rabbitMQService.sendToQueue(
+              CONSTANT.EVENT.PAYMENT.PAYMENT_SUCCESSED,
+              {
+                payment: paymentFound,
+                compensationId,
+                classroomList,
+                student,
+              }
+            );
+            break;
+          case CONSTANT.ENTITY.PAYMENT.STATUS.FAILED:
+            await this.rabbitMQService.sendToQueue(
+              CONSTANT.EVENT.PAYMENT.PAYMENT_FAILED,
+              {
+                payment: paymentFound,
+                compensationId,
+                classroomList,
+                student,
+              }
+            );
+            break;
+          case CONSTANT.ENTITY.PAYMENT.STATUS.CANCELED:
+            await this.rabbitMQService.sendToQueue(
+              CONSTANT.EVENT.PAYMENT.PAYMENT_CANCELED,
+              {
+                payment: paymentFound,
+                compensationId,
+                classroomList,
+                student,
+              }
+            );
+            break;
+          default:
+            break;
+        }
 
         return resolve({
-          result: {
-            payload,
-          },
+          result: paymentUpdatedFound,
         });
       } catch (error) {
         await queryRunner.rollbackTransaction();
         await queryRunner.release();
+
         return reject(error);
       }
     });
   }
 
-  async registerClassroomInitEvent(payload): Promise<any> {
+  async registerClassroomsEventHandler(payload): Promise<any> {
+    const { data } = payload;
+    const { compensationId, classroomList, student, feePerCredit } = data;
+
     return new Promise(async (resolve, reject) => {
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction();
       try {
-        const compensationId: string = payload?.data?.compensationId;
+        let amount = 0;
+
+        classroomList.forEach((classroom) => {
+          const { subject } = classroom;
+          const feePerSubject =
+            Number(subject?.numberOfCredits || 0) * feePerCredit;
+          amount += feePerSubject;
+        });
 
         let newPayment = {
           code: generateRandomCode(),
-          studentId: payload?.data?.user?.id,
+          studentId: student.id,
           paymentType: CONSTANT.ENTITY.PAYMENT.PAYMENT_TYPE.ZALO_PAY,
-          status: CONSTANT.ENTITY.PAYMENT.STATUS.INIT,
+          status: CONSTANT.ENTITY.PAYMENT.STATUS.AWAITTING_PAYMENT,
+          amount: amount,
+          compensationId,
         };
 
-        await queryRunner.manager.getRepository(PaymentEntity).save(newPayment);
+        const newPaymentDataSave = await queryRunner.manager
+          .getRepository(PaymentEntity)
+          .save(newPayment);
         await this.eventStoreService.commit(
           compensationId,
           null,
           newPayment,
-          CONSTANT.EVENT_STORE.ENTITY_TYPE.PAYMENT
+          "PAYMENT"
         );
+
+        const newPaymentFound = await queryRunner.manager
+          .getRepository(PaymentEntity)
+          .createQueryBuilder("payment")
+          .leftJoinAndSelect("payment.paymentDetails", "paymentDetails")
+          .where("payment.id = :id", {
+            id: newPaymentDataSave.id,
+          })
+          .orderBy("payment.created_date", "DESC")
+          .getOne();
+
+        await PromiseBlueBird.each(classroomList, async (classroom) => {
+          const { subject } = classroom;
+
+          const newPaymentDetailData = {
+            studentId: student?.id,
+            classroomId: classroom?.id,
+            paymentId: newPaymentFound?.id,
+            subjectId: subject?.id,
+            classroom,
+            subject,
+          };
+
+          const newPaymentDetailDataSave = await queryRunner.manager
+            .getRepository(PaymentDetailEntity)
+            .save(newPaymentDetailData);
+
+          const newPaymentDetailFound = await queryRunner.manager
+            .getRepository(PaymentDetailEntity)
+            .createQueryBuilder("paymentDetail")
+            .where("paymentDetail.id = :paymentDetailId", {
+              paymentDetailId: newPaymentDetailDataSave.id,
+            })
+            .getOne();
+
+          await this.eventStoreService.commit(
+            compensationId,
+            null,
+            newPaymentDetailFound,
+            "PAYMENT_DETAIL"
+          );
+        });
 
         await queryRunner.commitTransaction();
         await queryRunner.release();
 
+        await this.rabbitMQService.sendToQueue(
+          CONSTANT.EVENT.PAYMENT.PAYMENT_CREATION_SUCCESSED,
+          {
+            payment: newPaymentFound,
+            compensationId,
+            student,
+            classroomList,
+          }
+        );
+
         return resolve({
           result: {
-            payload,
+            ...payload,
+            compensationId,
           },
         });
       } catch (error) {
         await queryRunner.rollbackTransaction();
         await queryRunner.release();
+        await this.rabbitMQService.sendToQueue(
+          CONSTANT.EVENT.PAYMENT.PAYMENT_CREATION_FAILED,
+          {
+            compensationId,
+          }
+        );
+
         return reject(error);
       }
     });

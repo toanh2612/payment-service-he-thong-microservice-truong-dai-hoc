@@ -22,9 +22,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     // const request = ctx.getRequest<Request>();
     let exceptionResponse: any;
-    let httpStatusCode: HttpStatus = CONSTANT.ERROR.E0000.httpStatusCode;
-    let message: string = CONSTANT.ERROR.E0000.message;
-    let code: string = CONSTANT.ERROR.E0000.code;
+    let httpStatusCode: HttpStatus =
+      CONSTANT.ERROR.SYSTEM.GENERAL_ERROR.httpStatusCode;
+    let message: string = CONSTANT.ERROR.SYSTEM.GENERAL_ERROR.message;
+    let code: string = CONSTANT.ERROR.SYSTEM.GENERAL_ERROR.code;
     let stack: unknown | undefined;
 
     if (

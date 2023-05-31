@@ -52,6 +52,13 @@ export class PaymentEntity {
   status: string;
 
   @Column({
+    type: "uuid",
+    name: "compensation_id",
+    nullable: true,
+  })
+  compensationId: string;
+
+  @Column({
     name: "error_message",
     nullable: true,
   })
